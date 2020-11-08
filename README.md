@@ -12,10 +12,11 @@
 ### Docker build
 
 ```
-docker build -t aws_rss_feed_transbot:0.3 \
-  --build-arg my_s3_bucket_name=memex-var \
-  --build-arg sender_email=sender@email.com \
+docker build -t aws_rss_feed_transbot:latest \
+  --build-arg region_name="us-east-1" \
+  --build-arg my_s3_bucket_name="s3-bucket-name" \
+  --build-arg sender_email="sender@email.com" \
   --build-arg receiver_emails="receiver1@email.com,receiver2@email.com,receiver3@email.com" \
-  --build-arg cache_host=localhost ./
+  --build-arg cache_host="localhost" ./
 ```
 

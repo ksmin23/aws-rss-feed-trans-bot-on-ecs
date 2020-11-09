@@ -252,7 +252,7 @@ def save_feeds_translated(redis_client, feed_ids, ttl_sec=86400*3):
 def lambda_handler(event, context):
   LOGGER.info('start to get rss feed')
 
-  #redis_client = redis.Redis(host=ELASTICACHE_HOST, port=6379, db=0) if not TRANSLATE_ALL_FEEDS else None
+  redis_client = redis.Redis(host=ELASTICACHE_HOST, port=6379, db=0) if not TRANSLATE_ALL_FEEDS else None
 
   feeds_parsed = parse_feed(WHATS_NEW_URL)
 
@@ -261,12 +261,13 @@ def lambda_handler(event, context):
 
   LOGGER.info('filter new rss feeds')
 
-#  feed_ids = [e['id'] for e in feeds_parsed['entries']]
-#  feeds_translated = get_feeds_translated(redis_client, feed_ids)
-#  if len(feeds_translated):
-#    LOGGER.info('end')
-#    return
-  feeds_translated = [] 
+  feed_ids = [e['id'] for e in feeds_parsed['entries']]
+  feeds_translated = get_feeds_translated(redis_client, feed_ids)
+  if len(feeds_translated):
+    LOGGER.info('new_rss_feed: count=0')
+    LOGGER.info('end')
+    return
+
   feed_entries = [elem for elem in feeds_parsed['entries'] if elem['id'] not in feeds_translated] 
   res = {
     'count': len(feed_entries),
@@ -278,7 +279,6 @@ def lambda_handler(event, context):
     last_updated=time.strftime('%Y-%m-%dT%H:%M:%S', res['updated_parsed'])))
 
   LOGGER.info('translate rss feed')
-  #translator = Translator()
   translator = mk_translator(dest=TRANS_DEST_LANG)
   title_texts = [(e['id'], e['title']) for e in res['entries']]
   title_texts_trans = translate(translator, title_texts,
@@ -298,24 +298,23 @@ def lambda_handler(event, context):
     res['entries'][idx]['summary_trans'] = {'text': summary_trans, 'lang': TRANS_DEST_LANG}
 
   html_doc = gen_html(res)
-  print(html_doc) #DEBUG
 
   if not DRY_RUN:
     LOGGER.info('send translated rss feed by email')
     subject = '''[translated] AWS Recent Announcements'''
-    #send_email(EMAIL_FROM_ADDRESS, EMAIL_TO_ADDRESSES, subject, html_doc)
+    send_email(EMAIL_FROM_ADDRESS, EMAIL_TO_ADDRESSES, subject, html_doc)
 
   LOGGER.info('save translated rss feeds in S3')
 
   s3_file_name = 'anncmt-{}.html'.format(time.strftime('%Y%m%d%H', res['updated_parsed']))
   s3_obj_key = '{prefix}-html/{file_name}'.format(prefix=S3_OBJ_KEY_PREFIX, file_name=s3_file_name)
   s3_client = boto3.client('s3', region_name=AWS_REGION)
-  #fwrite_s3(s3_client, html_doc, s3_bucket=S3_BUCKET_NAME, s3_obj_key=s3_obj_key)
+  fwrite_s3(s3_client, html_doc, s3_bucket=S3_BUCKET_NAME, s3_obj_key=s3_obj_key)
 
   LOGGER.info('log translated rss feeds')
 
   feed_ids = [e['id'] for e in res['entries']]
-  #save_feeds_translated(redis_client, feed_ids)
+  save_feeds_translated(redis_client, feed_ids)
 
   LOGGER.info('end')
 
@@ -339,4 +338,3 @@ if __name__ == '__main__':
   lambda_handler(event, {})
   end_t = time.time()
   LOGGER.info('run_time: {:.2f}'.format(end_t - start_t))
-

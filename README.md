@@ -20,3 +20,62 @@ docker build -t aws_rss_feed_transbot:latest \
   --build-arg cache_host="localhost" ./
 ```
 
+tag docker image
+
+```
+docker tag aws_rss_feed_transbot:0.1 123456789012.dkr.ecr.us-east-1.amazonaws.com/transbot/rssfeed:0.1
+```
+
+push docker image
+
+```
+docker push 123456789012.dkr.ecr.us-east-1.amazonaws.com/transbot/rssfeed
+```
+
+```
+$ docker push 123456789012.dkr.ecr.us-east-1.amazonaws.com/transbot/rssfeed:0.1
+The push refers to repository [123456789012.dkr.ecr.us-east-1.amazonaws.com/transbot/rssfeed]
+b576d2933a1e: Preparing 
+5438fcfba053: Preparing 
+e1dcc4daa2de: Preparing 
+8c1ebb1b984d: Preparing 
+3196f0b198cb: Preparing 
+06b60c6e6ffd: Waiting 
+322c3996a80b: Waiting 
+225ef82ca30a: Waiting 
+d0fe97fa8b8c: Waiting 
+denied: Your authorization token has expired. Reauthenticate and try again.
+```
+
+To authenticate Docker to an Amazon ECR registry with get-login-password
+
+```
+aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 123456789012.dkr.ecr.us-east-1.amazonaws.com
+```
+
+
+```
+$ aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 123456789012.dkr.ecr.us-east-1.amazonaws.com
+WARNING! Your password will be stored unencrypted in /home/ec2-user/.docker/config.json.
+Configure a credential helper to remove this warning. See
+https://docs.docker.com/engine/reference/commandline/login/#credentials-store
+
+Login Succeeded
+```
+
+Retry to push Docker image
+
+```
+$ docker push 123456789012.dkr.ecr.us-east-1.amazonaws.com/transbot/rssfeed:0.1
+The push refers to repository [123456789012.dkr.ecr.us-east-1.amazonaws.com/transbot/rssfeed]
+b576d2933a1e: Pushed 
+5438fcfba053: Pushed 
+e1dcc4daa2de: Pushed 
+8c1ebb1b984d: Pushed 
+3196f0b198cb: Pushed 
+06b60c6e6ffd: Pushed 
+322c3996a80b: Pushed 
+225ef82ca30a: Pushed 
+d0fe97fa8b8c: Pushed 
+0.1: digest: sha256:46af6f95bc7fc37319de7d37f6c2148f70494e9f73ff69c0a5baf9d399ba5996 size: 2205
+```

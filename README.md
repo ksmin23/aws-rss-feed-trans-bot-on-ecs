@@ -53,7 +53,6 @@ To authenticate Docker to an Amazon ECR registry with get-login-password
 aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 123456789012.dkr.ecr.us-east-1.amazonaws.com
 ```
 
-
 ```
 $ aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 123456789012.dkr.ecr.us-east-1.amazonaws.com
 WARNING! Your password will be stored unencrypted in /home/ec2-user/.docker/config.json.
@@ -78,4 +77,53 @@ e1dcc4daa2de: Pushed
 225ef82ca30a: Pushed 
 d0fe97fa8b8c: Pushed 
 0.1: digest: sha256:46af6f95bc7fc37319de7d37f6c2148f70494e9f73ff69c0a5baf9d399ba5996 size: 2205
+```
+
+Scheduled Tasks
+
+```
+cron(0/5 * * * ? *)
+```
+
+IAM Policy that is included in `ecsTaskExecutionRole`
+
+S3 Access
+
+```
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Action": [
+                "s3:AbortMultipartUpload",
+                "s3:GetBucketLocation",
+                "s3:GetObject",
+                "s3:ListBucket",
+                "s3:ListBucketMultipartUploads",
+                "s3:PutObject"
+            ],
+            "Resource": [
+                "arn:aws:s3:::your-s3-bucket-name/whats-new-html/*"
+            ],
+            "Effect": "Allow"
+        }
+    ]
+}
+```
+
+AmazonSESFullAccess
+
+```
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "ses:*"
+            ],
+            "Resource": "*"
+        }
+    ]
+}
 ```

@@ -127,3 +127,6 @@ AmazonSESFullAccess
     ]
 }
 ```
+
+CDK로 필요한 인프라 만들기 - VPC, ElastiCache for Redis, ECS Cluster, Scheduled Task
+Scheduled Task의 Security Group 변경하기 <-- Manual 또는 aws cli를 이용해서

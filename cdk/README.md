@@ -37,6 +37,14 @@ Once the virtualenv is activated, you can install the required dependencies.
 $ pip install -r requirements.txt
 ```
 
+```
+{
+  "vpc_name": "Your-VPC-Name",
+  "s3_bucket_name": "Your-S3-Bucket-Name",
+  "event_schedule": "0 * * * *"
+}
+```
+
 At this point you can now synthesize the CloudFormation template for this code.
 
 ```

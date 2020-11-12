@@ -38,8 +38,44 @@ class RssFeedTransBotEcsStack(core.Stack):
       vpc=vpc
     )
 
-    task_role_policy_doc = aws_iam.PolicyDocument()
-    task_role_policy_doc.add_statements(aws_iam.PolicyStatement(**{
+    # task_role_policy_doc = aws_iam.PolicyDocument()
+    # task_role_policy_doc.add_statements(aws_iam.PolicyStatement(**{
+    #   "effect": aws_iam.Effect.ALLOW,
+    #   "resources": [s3_bucket.bucket_arn, "{}/*".format(s3_bucket.bucket_arn)],
+    #   "actions": ["s3:AbortMultipartUpload",
+    #     "s3:GetBucketLocation",
+    #     "s3:GetObject",
+    #     "s3:ListBucket",
+    #     "s3:ListBucketMultipartUploads",
+    #     "s3:PutObject"]
+    # }))
+
+    # task_role_policy_doc.add_statements(aws_iam.PolicyStatement(**{
+    #   "effect": aws_iam.Effect.ALLOW,
+    #   "resources": ["*"],
+    #   "actions": ["ses:SendEmail"]
+    # }))
+
+    task_execution_role = aws_iam.Role(self, 'ecsScheduledTaskRole',
+      role_name='ecsRssFeedTransTaskExecutionRole',
+      assumed_by=aws_iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
+      managed_policies=[
+        aws_iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AmazonECSTaskExecutionRolePolicy")
+      ]
+    )
+
+    #XXX: ECS Fargate Task Scheduling using existing Security Group #5213
+    # https://github.com/aws/aws-cdk/issues/5213
+    # https://stackoverflow.com/questions/59067514/aws-cdk-ecs-task-scheduling-specify-existing-securitygroup
+    task = aws_ecs.FargateTaskDefinition(self, 'TaskDef',
+      cpu=512,
+      memory_limit_mib=1024,
+      execution_role=task_execution_role #TODO: can not attach Execution Role
+      #,task_role=task_role
+    )
+    #XXX: execution_role does not be created
+
+    task.add_to_task_role_policy(aws_iam.PolicyStatement(**{
       "effect": aws_iam.Effect.ALLOW,
       "resources": [s3_bucket.bucket_arn, "{}/*".format(s3_bucket.bucket_arn)],
       "actions": ["s3:AbortMultipartUpload",
@@ -50,29 +86,11 @@ class RssFeedTransBotEcsStack(core.Stack):
         "s3:PutObject"]
     }))
 
-    task_role_policy_doc.add_statements(aws_iam.PolicyStatement(**{
+    task.add_to_task_role_policy(aws_iam.PolicyStatement(**{
       "effect": aws_iam.Effect.ALLOW,
       "resources": ["*"],
       "actions": ["ses:SendEmail"]
     }))
-
-    task_role_role = aws_iam.Role(self, 'ecsScheduledTaskRole',
-      role_name='ecsRssFeedTransTaskRole',
-      assumed_by=aws_iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
-      inline_policies={
-        'ecsRssfeedTransBot': task_role_policy_doc
-      }
-    )
-
-    #XXX: ECS Fargate Task Scheduling using existing Security Group #5213
-    # https://github.com/aws/aws-cdk/issues/5213
-    # https://stackoverflow.com/questions/59067514/aws-cdk-ecs-task-scheduling-specify-existing-securitygroup
-    task = aws_ecs.FargateTaskDefinition(self, 'TaskDef',
-      cpu=512,
-      memory_limit_mib=1024,
-      task_role=task_role_role
-    )
-    #XXX: execution_role does not be created
 
     repository_arn = aws_ecr.Repository.arn_for_local_repository(
       "transbot/rssfeed",
@@ -116,8 +134,17 @@ class RssFeedTransBotEcsStack(core.Stack):
       mutable=False
     )
 
+    ecs_events_role = aws_iam.Role(self, 'ecsEventsRole',
+      role_name='ecsRssFeedTransEventsRole',
+      assumed_by=aws_iam.ServicePrincipal('events.amazonaws.com'),
+      managed_policies=[
+        aws_iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AmazonEC2ContainerServiceEventsRole")
+      ]
+    )
+
     scheduled_event_rule.add_target(aws_events_targets.EcsTask(cluster=cluster,
       task_definition=task,
+      role=ecs_events_role,
       security_groups=[sg_ecs_cron_task, sg_use_elasticache],
       subnet_selection=aws_ec2.SubnetSelection(subnet_type=aws_ec2.SubnetType.PRIVATE)))
 

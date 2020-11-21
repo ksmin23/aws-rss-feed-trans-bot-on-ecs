@@ -1,0 +1,9 @@
+{
+  "vpc_name": "[X]default",
+  "s3_bucket_name": your-s3-bucket-name",
+  "email_from_address": "your-sender-email-addr",
+  "email_to_addresses": "your-receiver-email-addr-list",
+  "dry_run": "false",
+  "trans_dest_lang": "ko",
+  "event_schedule": "0 * * * *"
+}

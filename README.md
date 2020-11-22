@@ -7,126 +7,102 @@
 
 
 ## Deployment
+### Build & Push Docker Image
+1. ECR Repository를 생성한다. 
+  예를 들어, `transbot/rssfeed` 이름의 Repository를 생성한다.
 
+2. Docker 이미지를 빌드한다.
 
-### Docker build
+    ```
+    $ docker build -t aws_rss_feed_transbot:latest \
+        --build-arg region_name="{aws-region-name}" \
+        --build-arg my_s3_bucket_name="{s3-bucket-name}" \
+        --build-arg sender_email="{sender@email.com}" \
+        --build-arg receiver_emails="{receiver1@email.com,receiver2@email.com,receiver3@email.com}" \
+        --build-arg cache_host="{localhost}" ./
+    ```
+    `my_s3_bucket_name` 는 `aws-rss-feed-{region}-{suffix}` 형식으로 지정한다.
+    (예: `aws-rss-feed-us-east-1-hq4t378`)
 
-```
-docker build -t aws_rss_feed_transbot:latest \
-  --build-arg region_name="us-east-1" \
-  --build-arg my_s3_bucket_name="s3-bucket-name" \
-  --build-arg sender_email="sender@email.com" \
-  --build-arg receiver_emails="receiver1@email.com,receiver2@email.com,receiver3@email.com" \
-  --build-arg cache_host="localhost" ./
-```
+3. Docker 이미지 태그를 생성한다.
+    ```
+    $ docker tag aws_rss_feed_transbot:{tag} {account_id}.dkr.ecr.{region}.amazonaws.com/{repository_name}:{tag}
+    ```
 
-tag docker image
+4. Docker 이미지를 ECR Repository에 push 하기 위해서 Amazon ECR Registry에 인증을 획득한다.
+   
+    ```
+    $ aws ecr get-login-password --region {region} | docker login --username AWS --password-stdin {account_id}.dkr.ecr.{region}.amazonaws.com
+    ```
 
-```
-docker tag aws_rss_feed_transbot:0.1 123456789012.dkr.ecr.us-east-1.amazonaws.com/transbot/rssfeed:0.1
-```
+5. Docker 이미지를 ECR Repository에 push 한다.
 
-push docker image
+    ```
+    $ docker push {account_id}.dkr.ecr.{region}.amazonaws.com/{repository_name}
+    ```
 
-```
-docker push 123456789012.dkr.ecr.us-east-1.amazonaws.com/transbot/rssfeed
-```
+### Deploy ECS Scheduled Task
+1. [Getting Started With the AWS CDK](https://docs.aws.amazon.com/cdk/latest/guide/getting_started.html)를 참고해서 cdk를 설치하고,
+cdk를 실행할 때 사용할 IAM User를 생성한 후, `~/.aws/config`에 등록한다.
+예를 들어서, `cdk_user`라는 IAM User를 생성 한 후, 아래와 같이 `~/.aws/config`에 추가로 등록한다.
 
-```
-$ docker push 123456789012.dkr.ecr.us-east-1.amazonaws.com/transbot/rssfeed:0.1
-The push refers to repository [123456789012.dkr.ecr.us-east-1.amazonaws.com/transbot/rssfeed]
-b576d2933a1e: Preparing 
-5438fcfba053: Preparing 
-e1dcc4daa2de: Preparing 
-8c1ebb1b984d: Preparing 
-3196f0b198cb: Preparing 
-06b60c6e6ffd: Waiting 
-322c3996a80b: Waiting 
-225ef82ca30a: Waiting 
-d0fe97fa8b8c: Waiting 
-denied: Your authorization token has expired. Reauthenticate and try again.
-```
+    ```shell script
+    $ cat ~/.aws/config
+    [profile cdk_user]
+    aws_access_key_id=AKIAIOSFODNN7EXAMPLE
+    aws_secret_access_key=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+    region=us-east-1
+    ```
 
-To authenticate Docker to an Amazon ECR registry with get-login-password
+1. 아래와 같이 소스 코드를 git clone 한 후에, python virtualenv 환경을 구성한다.
 
-```
-aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 123456789012.dkr.ecr.us-east-1.amazonaws.com
-```
+    ```shell script
+    $ git clone https://github.com/ksmin23/aws-rss-feed-trans-bot-on-ecs.git
+    $ cd aws-rss-feed-trans-bot-on-ecs
+    $ cd cdk
+    $ python3 -m venv .env
+    $ source .env/bin/activate
+    (.env) $ pip install -r requirements.txt
+    ```
 
-```
-$ aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 123456789012.dkr.ecr.us-east-1.amazonaws.com
-WARNING! Your password will be stored unencrypted in /home/ec2-user/.docker/config.json.
-Configure a credential helper to remove this warning. See
-https://docs.docker.com/engine/reference/commandline/login/#credentials-store
+2. `cdk.context.json` 파일을 열어서, `vpc_name` 에 사용할 VPC 이름을 적는다.<br/>`s3_bucket_name_suffix`에 번역한 결과를 저장할 s3 bucket의 suffix를 적고,<br/>`email_from_address`과 `email_to_addresses`에 e-mail 발신자와 수신자들 목록을 각각 넣는다.<br/> RSS Feed를 읽는 주기를 변경하고자 하는 경우, `event_schedule`을 crontab 문법 처럼 등록 한다.<br/>
+`event_schedule` 기본 값은 매 시간 마다 RSS Feed를 읽어서 번역한다.<br/>
+`container_repository_name`, `container_image_tag`는 앞서 생성한 Amazon ECR Repository 이름과 Amazon ERC Repository에 push한 Docker 이미지 태그를 각각 등록한다.
 
-Login Succeeded
-```
+    ```json
+    {
+        "vpc_name": "Your-VPC-Name",
+        "s3_bucket_name_suffix": "Your-S3-Bucket-Name-Suffix",
+        "email_from_address": "Your-Sender-Email-Addr",
+        "email_to_addresses": "Your-Receiver-Email-Addr-List",
+        "dry_run": "false",
+        "trans_dest_lang": "ko",
+        "event_schedule": "0 * * * *",
+        "container_repository_name": "Your-ECR-Repository-Name",
+        "container_image_tag": "Your-Container-Image-Tag"
+    }
+    ```
+ 
+   `email_from_address`은 [Amazon SES에서 이메일 주소 확인](https://docs.aws.amazon.com/ses/latest/DeveloperGuide/verify-email-addresses.html)를 참고해서 반드시 사용 가능한 email 주소인지 확인한다. (배포 전에 한번만 확인 하면 된다.)
+    예를 들어, `sender@amazon.com`라는 email 주소를 확인하려면 다음과 같이 한다.
+      ```
+      aws ses verify-email-identity --email-address sender@amazon.com
+      ```
 
-Retry to push Docker image
+3. `cdk deploy` 명령어를 이용해서 배포한다.
+    ```shell script
+    (.env) $ cdk --profile=cdk_user deploy
+    ```
 
-```
-$ docker push 123456789012.dkr.ecr.us-east-1.amazonaws.com/transbot/rssfeed:0.1
-The push refers to repository [123456789012.dkr.ecr.us-east-1.amazonaws.com/transbot/rssfeed]
-b576d2933a1e: Pushed 
-5438fcfba053: Pushed 
-e1dcc4daa2de: Pushed 
-8c1ebb1b984d: Pushed 
-3196f0b198cb: Pushed 
-06b60c6e6ffd: Pushed 
-322c3996a80b: Pushed 
-225ef82ca30a: Pushed 
-d0fe97fa8b8c: Pushed 
-0.1: digest: sha256:46af6f95bc7fc37319de7d37f6c2148f70494e9f73ff69c0a5baf9d399ba5996 size: 2205
-```
+4. 배포한 애플리케이션을 삭제하려면, `cdk destroy` 명령어를 아래와 같이 실행 한다.
+    ```shell script
+    (.env) $ cdk --profile=cdk_user destroy
+    ```
 
-Scheduled Tasks
+##### Useful commands
 
-```
-cron(0/5 * * * ? *)
-```
-
-IAM Policy that is included in `ecsTaskExecutionRole`
-
-S3 Access
-
-```
-{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Action": [
-                "s3:AbortMultipartUpload",
-                "s3:GetBucketLocation",
-                "s3:GetObject",
-                "s3:ListBucket",
-                "s3:ListBucketMultipartUploads",
-                "s3:PutObject"
-            ],
-            "Resource": [
-                "arn:aws:s3:::your-s3-bucket-name/whats-new-html/*"
-            ],
-            "Effect": "Allow"
-        }
-    ]
-}
-```
-
-AmazonSESFullAccess
-
-```
-{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Effect": "Allow",
-            "Action": [
-                "ses:*"
-            ],
-            "Resource": "*"
-        }
-    ]
-}
-```
-
-CDK로 필요한 인프라 만들기 - VPC, ElastiCache for Redis, ECS Cluster, Scheduled Task
-Scheduled Task의 Security Group 변경하기 <-- Manual 또는 aws cli를 이용해서
+ * `cdk ls`          list all stacks in the app
+ * `cdk synth`       emits the synthesized CloudFormation template
+ * `cdk deploy`      deploy this stack to your default AWS account/region
+ * `cdk diff`        compare deployed stack with current state
+ * `cdk docs`        open CDK documentation

@@ -17,7 +17,7 @@
 2. Docker 이미지를 빌드한다.
 
     ```
-    $ docker build -t aws_rss_feed_transbot:latest \
+    $ docker build -t aws_rss_feed_transbot:{tag} \
         --build-arg region_name="{aws-region-name}" \
         --build-arg my_s3_bucket_name="{s3-bucket-name}" \
         --build-arg sender_email="{sender@email.com}" \

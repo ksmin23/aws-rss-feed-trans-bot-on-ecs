@@ -65,7 +65,7 @@ cdk를 실행할 때 사용할 IAM User를 생성한 후, `~/.aws/config`에 등
     $ cd cdk
     $ python3 -m venv .env
     $ source .env/bin/activate
-    (.env) $ pip install -r requirements.txt
+    (.env) $ pip install -r requirements-cdk.txt
     ```
 
 2. `cdk.context.json` 파일을 열어서, `vpc_name` 에 사용할 VPC 이름을 적는다.<br/>`s3_bucket_name_suffix`에 번역한 결과를 저장할 s3 bucket의 suffix를 적고,<br/>`email_from_address`과 `email_to_addresses`에 e-mail 발신자와 수신자들 목록을 각각 넣는다.<br/> RSS Feed를 읽는 주기를 변경하고자 하는 경우, `event_schedule`을 crontab 문법 처럼 등록 한다.<br/>

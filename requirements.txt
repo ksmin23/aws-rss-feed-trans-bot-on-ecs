@@ -1,11 +1,7 @@
 boto3==1.15.16
 botocore==1.18.16
 
-# packages for aws lambda layer
-# DO NOT REMOVE [[layers]] comment
-#[[layers]]
 beautifulsoup4==4.9.3
 feedparser==6.0.1
 googletrans==3.0.0
 redis==3.3.11
-

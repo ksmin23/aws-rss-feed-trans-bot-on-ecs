@@ -19,8 +19,6 @@ from aws_cdk import (
     aws_applicationautoscaling
 )
 
-#TODO: divide stacks: vpc, redis, ecs cluster
-
 class RssFeedTransBotEcsStack(core.Stack):
 
   def __init__(self, scope: core.Construct, id: str, **kwargs) -> None:
@@ -29,11 +27,19 @@ class RssFeedTransBotEcsStack(core.Stack):
     # The code that defines your stack goes here
     vpc_name = self.node.try_get_context("vpc_name")
     vpc = aws_ec2.Vpc.from_lookup(self, "VPC",
-      is_default=True,
+      # is_default=True, #XXX: Whether to match the default VPC
       vpc_name=vpc_name)
 
-    s3_bucket_name = self.node.try_get_context('s3_bucket_name')
-    s3_bucket = s3.Bucket.from_bucket_name(self, id, s3_bucket_name)
+    # s3_bucket_name = self.node.try_get_context('s3_bucket_name')
+    # s3_bucket = s3.Bucket.from_bucket_name(self, id, s3_bucket_name)
+    s3_bucket_name_suffix = self.node.try_get_context('s3_bucket_name_suffix')
+    s3_bucket = s3.Bucket(self, 'TransRecentAnncmtBucket',
+      bucket_name='aws-rss-feed-{region}-{suffix}'.format(region=core.Aws.REGION,
+        suffix=s3_bucket_name_suffix))
+
+    s3_bucket.add_lifecycle_rule(prefix='whats-new-html/', id='whats-new-html',
+      abort_incomplete_multipart_upload_after=core.Duration.days(3),
+      expiration=core.Duration.days(7))
 
     sg_use_elasticache = aws_ec2.SecurityGroup(self, 'RssFeedTransBotCacheClientSG',
       vpc=vpc,
@@ -110,34 +116,49 @@ class RssFeedTransBotEcsStack(core.Stack):
     #XXX: ECS Fargate Task Scheduling using existing Security Group #5213
     # https://github.com/aws/aws-cdk/issues/5213
     # https://stackoverflow.com/questions/59067514/aws-cdk-ecs-task-scheduling-specify-existing-securitygroup
-    task = aws_ecs.FargateTaskDefinition(self, 'TaskDef',
+    task = aws_ecs.FargateTaskDefinition(self, 'ECSTaskDef',
       cpu=512,
       memory_limit_mib=1024,
-      # execution_role=task_execution_role #TODO: can not attach Execution Role
       task_role=task_execution_role
     )
-    #XXX: execution_role does not be created
 
-    repository_arn = aws_ecr.Repository.arn_for_local_repository(
-      "transbot/rssfeed",
-      self,
-      core.Aws.ACCOUNT_ID)
+    repository_name = self.node.try_get_context('container_repository_name')
+    repository_arn = aws_ecr.Repository.arn_for_local_repository(repository_name,
+      self, core.Aws.ACCOUNT_ID)
 
     # repository = aws_ecr.Repository.from_repository_arn(self, "Repository",
     #   repository_arn=repository_arn)
     #
     # jsii.errors.JSIIError: "repositoryArn" is a late-bound value,
     # and therefore "repositoryName" is required. Use `fromRepositoryAttributes` instead
-    repository = aws_ecr.Repository.from_repository_attributes(self, "Repository",
+    repository = aws_ecr.Repository.from_repository_attributes(self, "ContainerRepository",
       repository_arn=repository_arn,
-      repository_name="transbot/rssfeed")
+      repository_name=repository_name)
 
-    task.add_container('ContainerImg',
-      image=aws_ecs.ContainerImage.from_ecr_repository(repository, tag="0.3"),
+    container_image_tag = self.node.try_get_context('container_image_tag')
+    container_image_tag = 'latest' if not container_image_tag else container_image_tag
+
+    DRY_RUN = self.node.try_get_context('dry_run')
+    DRY_RUN = 'false' if not DRY_RUN else DRY_RUN
+
+    TRANSLATE_ALL_FEEDS = self.node.try_get_context('translate_all_feeds')
+    TRANSLATE_ALL_FEEDS = 'false' if not TRANSLATE_ALL_FEEDS else TRANSLATE_ALL_FEEDS
+
+    TRANS_DEST_LANG = self.node.try_get_context('trans_dest_lang')
+    TRANS_DEST_LANG = 'false' if not TRANS_DEST_LANG else TRANS_DEST_LANG
+
+    EMAIL_FROM_ADDRESS = self.node.try_get_context('email_from_address')
+    EMAIL_TO_ADDRESSES = self.node.try_get_context('email_to_addresses')
+    task.add_container('transbot',
+      image=aws_ecs.ContainerImage.from_ecr_repository(repository, tag=container_image_tag),
       environment={
         "ELASTICACHE_HOST": translated_feed_cache.attr_redis_endpoint_address,
-        "DRY_RUN": "false",
-        "TRANSLATE_ALL_FEEDS": "false"
+        "DRY_RUN": DRY_RUN,
+        "TRANS_DEST_LANG": TRANS_DEST_LANG,
+        "TRANSLATE_ALL_FEEDS": TRANSLATE_ALL_FEEDS,
+        "EMAIL_FROM_ADDRESS": EMAIL_FROM_ADDRESS,
+        "EMAIL_TO_ADDRESSES": EMAIL_TO_ADDRESSES,
+        "REGION_NAME": core.Aws.REGION
       },
       logging=aws_ecs.LogDriver.aws_logs(stream_prefix="ecs",
         log_group=aws_logs.LogGroup(self, 
@@ -152,8 +173,9 @@ class RssFeedTransBotEcsStack(core.Stack):
       self.node.try_get_context('event_schedule').split(' ')))
 
     scheduled_event_rule = aws_events.Rule(self, 'RssFeedScheduledRule',
-      enabled=False,
-      schedule=aws_events.Schedule.cron(**event_schedule))
+      enabled=True,
+      schedule=aws_events.Schedule.cron(**event_schedule),
+      description="Translate AWS What's New")
 
     ecs_events_role = aws_iam.Role(self, 'ecsEventsRole',
       role_name='ecsRssFeedTransEventsRole',

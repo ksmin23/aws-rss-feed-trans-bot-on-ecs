@@ -1,9 +1,11 @@
 {
-  "vpc_name": "[X]default",
-  "s3_bucket_name": your-s3-bucket-name",
-  "email_from_address": "your-sender-email-addr",
-  "email_to_addresses": "your-receiver-email-addr-list",
+  "vpc_name": "Your-VPC-Name",
+  "s3_bucket_name_suffix": "Your-S3-Bucket-Name-Suffix",
+  "email_from_address": "Your-Sender-Email-Addr",
+  "email_to_addresses": "Your-Receiver-Email-Addr-List",
   "dry_run": "false",
   "trans_dest_lang": "ko",
-  "event_schedule": "0 * * * *"
+  "event_schedule": "0 * * * *",
+  "container_repository_name": "Your-ECR-Repository-Name",
+  "container_image_tag": "Your-Container-Image-Tag"
 }

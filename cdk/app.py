@@ -34,7 +34,7 @@ class RssFeedTransBotEcsStack(Stack):
     # s3_bucket = s3.Bucket.from_bucket_name(self, id, s3_bucket_name)
     s3_bucket_name_suffix = self.node.try_get_context('s3_bucket_name_suffix')
     s3_bucket = s3.Bucket(self, 'TransRecentAnncmtBucket',
-      removal_policy=cdk.RemovalPolicy.DESTROY,
+      # removal_policy=cdk.RemovalPolicy.DESTROY,
       bucket_name='aws-rss-feed-{region}-{suffix}'.format(region=cdk.Aws.REGION,
         suffix=s3_bucket_name_suffix))
 

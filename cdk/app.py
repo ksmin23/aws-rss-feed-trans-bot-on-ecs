@@ -4,27 +4,27 @@
 
 import os
 
+import aws_cdk as cdk
+
 from aws_cdk import (
-    core,
+  Stack,
     aws_ec2,
     aws_ecr,
     aws_ecs,
-    aws_ecs_patterns,
     aws_elasticache,
     aws_events,
     aws_events_targets,
     aws_iam,
     aws_logs,
-    aws_s3 as s3,
-    aws_applicationautoscaling
+    aws_s3 as s3
 )
+from constructs import Construct
 
-class RssFeedTransBotEcsStack(core.Stack):
+class RssFeedTransBotEcsStack(Stack):
 
-  def __init__(self, scope: core.Construct, id: str, **kwargs) -> None:
-    super().__init__(scope, id, **kwargs)
+  def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
+    super().__init__(scope, construct_id, **kwargs)
 
-    # The code that defines your stack goes here
     vpc_name = self.node.try_get_context("vpc_name")
     vpc = aws_ec2.Vpc.from_lookup(self, "VPC",
       # is_default=True, #XXX: Whether to match the default VPC
@@ -34,12 +34,13 @@ class RssFeedTransBotEcsStack(core.Stack):
     # s3_bucket = s3.Bucket.from_bucket_name(self, id, s3_bucket_name)
     s3_bucket_name_suffix = self.node.try_get_context('s3_bucket_name_suffix')
     s3_bucket = s3.Bucket(self, 'TransRecentAnncmtBucket',
-      bucket_name='aws-rss-feed-{region}-{suffix}'.format(region=core.Aws.REGION,
+      removal_policy=cdk.RemovalPolicy.DESTROY,
+      bucket_name='aws-rss-feed-{region}-{suffix}'.format(region=cdk.Aws.REGION,
         suffix=s3_bucket_name_suffix))
 
     s3_bucket.add_lifecycle_rule(prefix='whats-new-html/', id='whats-new-html',
-      abort_incomplete_multipart_upload_after=core.Duration.days(3),
-      expiration=core.Duration.days(7))
+      abort_incomplete_multipart_upload_after=cdk.Duration.days(3),
+      expiration=cdk.Duration.days(7))
 
     sg_use_elasticache = aws_ec2.SecurityGroup(self, 'RssFeedTransBotCacheClientSG',
       vpc=vpc,
@@ -47,7 +48,7 @@ class RssFeedTransBotEcsStack(core.Stack):
       description='security group for redis client used rss feed trans bot',
       security_group_name='use-rss-feed-trans-bot-redis'
     )
-    core.Tags.of(sg_use_elasticache).add('Name', 'use-rss-feed-trans-bot-redis')
+    cdk.Tags.of(sg_use_elasticache).add('Name', 'use-rss-feed-trans-bot-redis')
 
     sg_elasticache = aws_ec2.SecurityGroup(self, 'RssFeedTransBotCacheSG',
       vpc=vpc,
@@ -55,13 +56,13 @@ class RssFeedTransBotEcsStack(core.Stack):
       description='security group for redis used rss feed trans bot',
       security_group_name='rss-feed-trans-bot-redis'
     )
-    core.Tags.of(sg_elasticache).add('Name', 'rss-feed-trans-bot-redis')
+    cdk.Tags.of(sg_elasticache).add('Name', 'rss-feed-trans-bot-redis')
 
     sg_elasticache.add_ingress_rule(peer=sg_use_elasticache, connection=aws_ec2.Port.tcp(6379), description='use-rss-feed-trans-bot-redis')
 
     elasticache_subnet_group = aws_elasticache.CfnSubnetGroup(self, 'RssFeedTransBotCacheSubnetGroup',
       description='subnet group for rss-feed-trans-bot-redis',
-      subnet_ids=vpc.select_subnets(subnet_type=aws_ec2.SubnetType.PRIVATE).subnet_ids,
+      subnet_ids=vpc.select_subnets(subnet_type=aws_ec2.SubnetType.PRIVATE_WITH_NAT).subnet_ids,
       cache_subnet_group_name='rss-feed-trans-bot-redis'
     )
 
@@ -124,7 +125,7 @@ class RssFeedTransBotEcsStack(core.Stack):
 
     repository_name = self.node.try_get_context('container_repository_name')
     repository_arn = aws_ecr.Repository.arn_for_local_repository(repository_name,
-      self, core.Aws.ACCOUNT_ID)
+      self, cdk.Aws.ACCOUNT_ID)
 
     # repository = aws_ecr.Repository.from_repository_arn(self, "Repository",
     #   repository_arn=repository_arn)
@@ -158,13 +159,14 @@ class RssFeedTransBotEcsStack(core.Stack):
         "TRANSLATE_ALL_FEEDS": TRANSLATE_ALL_FEEDS,
         "EMAIL_FROM_ADDRESS": EMAIL_FROM_ADDRESS,
         "EMAIL_TO_ADDRESSES": EMAIL_TO_ADDRESSES,
-        "REGION_NAME": core.Aws.REGION
+        "REGION_NAME": cdk.Aws.REGION
       },
       logging=aws_ecs.LogDriver.aws_logs(stream_prefix="ecs",
         log_group=aws_logs.LogGroup(self, 
           "ECSContainerLogGroup",
           log_group_name="/ecs/rss-feed-trans-bot",
-          retention=aws_logs.RetentionDays.ONE_DAY)
+          retention=aws_logs.RetentionDays.ONE_DAY,
+          removal_policy=cdk.RemovalPolicy.DESTROY)
       )
     )
 
@@ -189,12 +191,13 @@ class RssFeedTransBotEcsStack(core.Stack):
       task_definition=task,
       role=ecs_events_role,
       security_groups=[sg_use_elasticache],
-      subnet_selection=aws_ec2.SubnetSelection(subnet_type=aws_ec2.SubnetType.PRIVATE)))
+      subnet_selection=aws_ec2.SubnetSelection(subnet_type=aws_ec2.SubnetType.PRIVATE_WITH_NAT)))
 
-_env = core.Environment(
+
+_env = cdk.Environment(
   account=os.environ["CDK_DEFAULT_ACCOUNT"],
   region=os.environ["CDK_DEFAULT_REGION"])
 
-app = core.App()
-RssFeedTransBotEcsStack(app, "rss-feed-trans-bot-on-ecs", env=_env)
+app = cdk.App()
+RssFeedTransBotEcsStack(app, "AWSBlogRssFeedTransBotOnECS", env=_env)
 app.synth()

@@ -11,7 +11,7 @@
 
 ## Deployment
 ### Build & Push Docker Image
-1. ECR Repository를 생성한다. 
+1. ECR Repository를 생성한다.
   예를 들어, `transbot/rssfeed` 이름의 Repository를 생성한다.
 
 2. Docker 이미지를 빌드한다.
@@ -33,15 +33,21 @@
     ```
 
 4. Docker 이미지를 ECR Repository에 push 하기 위해서 Amazon ECR Registry에 인증을 획득한다.
-   
+
     ```
     $ aws ecr get-login-password --region {region} | docker login --username AWS --password-stdin {account_id}.dkr.ecr.{region}.amazonaws.com
     ```
 
-5. Docker 이미지를 ECR Repository에 push 한다.
+5. ECR Repository를 생성한다.
 
     ```
-    $ docker push {account_id}.dkr.ecr.{region}.amazonaws.com/{repository_name}
+    $ aws ecr create-repository --repository-name {repository_name}
+    ```
+
+6. Docker 이미지를 ECR Repository에 push 한다.
+
+    ```
+    $ docker push {account_id}.dkr.ecr.{region}.amazonaws.com/{repository_name}:{tag}
     ```
 
 ### Deploy ECS Scheduled Task
@@ -85,7 +91,7 @@ cdk를 실행할 때 사용할 IAM User를 생성한 후, `~/.aws/config`에 등
         "container_image_tag": "Your-Container-Image-Tag"
     }
     ```
- 
+
    `email_from_address`은 [Amazon SES에서 이메일 주소 확인](https://docs.aws.amazon.com/ses/latest/DeveloperGuide/verify-email-addresses.html)를 참고해서 반드시 사용 가능한 email 주소인지 확인한다. (배포 전에 한번만 확인 하면 된다.)
     예를 들어, `sender@amazon.com`라는 email 주소를 확인하려면 다음과 같이 한다.
       ```
@@ -109,3 +115,10 @@ cdk를 실행할 때 사용할 IAM User를 생성한 후, `~/.aws/config`에 등
  * `cdk deploy`      deploy this stack to your default AWS account/region
  * `cdk diff`        compare deployed stack with current state
  * `cdk docs`        open CDK documentation
+
+## References
+
+ * [Amazon ECR - Private registry authentication](https://docs.aws.amazon.com/AmazonECR/latest/userguide/registry_auth.html)
+ * [Amazon ECR - Pushing an image](https://docs.aws.amazon.com/AmazonECR/latest/userguide/image-push.html)
+ * [Amazon ECR - Pulling an image](https://docs.aws.amazon.com/AmazonECR/latest/userguide/docker-pull-ecr-image.html)
+ * [aws cli - ecr](https://awscli.amazonaws.com/v2/documentation/api/latest/reference/ecr/index.html#cli-aws-ecr)

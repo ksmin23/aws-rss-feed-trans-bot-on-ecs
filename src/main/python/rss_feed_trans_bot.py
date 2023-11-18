@@ -52,6 +52,9 @@ WHATS_NEW_URL = 'https://aws.amazon.com/about-aws/whats-new/recent/feed/'
 
 ELASTICACHE_HOST = os.getenv('ELASTICACHE_HOST', 'localhost')
 
+TRANS_CLIENT = None
+
+
 
 def split_list(x, n=10):
   return [x[i:i + n] for i in range(0, len(x), n)]
@@ -81,27 +84,22 @@ def parse_feed(feed_url):
   return {'entries': entry_list, 'updated_parsed': parsed_rss_feed['updated_parsed'], 'count': len(entry_list)}
 
 
-def mk_translator(dest='ko'):
-  for i in range(1, 7):
-    try:
-      translator = Translator()
-      _ = translator.translate('Hello', dest=dest)
-      return translator
-    except Exception as ex:
-      LOGGER.error(repr(ex))
-      wait_time = min(pow(2, i), 60)
-      LOGGER.info('retry to translate after %s sec' % wait_time)
-      time.sleep(wait_time)
-  else:
-    raise RuntimeError()
+def mk_translator(region_name=AWS_REGION):
+  global TRANS_CLIENT
+
+  if not TRANS_CLIENT:
+    TRANS_CLIENT = boto3.client('translate', region_name=region_name)
+  assert TRANS_CLIENT
+  return TRANS_CLIENT
 
 
-def translate(translator, texts, dest='ko', interval=1):
+def translate(translator, texts, src='en', dest='ko', interval=1):
   trans_texts = collections.OrderedDict()
 
   for key, elem in texts:
-    trans_res = translator.translate(elem, dest=dest)
-    trans_texts[key] = trans_res.text
+    trans_res = translator.translate_text(Text=elem,
+      SourceLanguageCode=src, TargetLanguageCode=dest)
+    trans_texts[key] = trans_res['TranslatedText'] if 200 == trans_res['ResponseMetadata']['HTTPStatusCode'] else None
     time.sleep(interval)
   return trans_texts
 
@@ -268,7 +266,7 @@ def lambda_handler(event, context):
     LOGGER.info('end')
     return
 
-  feed_entries = [elem for elem in feeds_parsed['entries'] if elem['id'] not in feeds_translated] 
+  feed_entries = [elem for elem in feeds_parsed['entries'] if elem['id'] not in feeds_translated]
   res = {
     'count': len(feed_entries),
     'updated_parsed': feeds_parsed['updated_parsed'],
@@ -279,7 +277,7 @@ def lambda_handler(event, context):
     last_updated=time.strftime('%Y-%m-%dT%H:%M:%S', res['updated_parsed'])))
 
   LOGGER.info('translate rss feed')
-  translator = mk_translator(dest=TRANS_DEST_LANG)
+  translator = mk_translator(region_name=AWS_REGION)
   title_texts = [(e['id'], e['title']) for e in res['entries']]
   title_texts_trans = translate(translator, title_texts,
     dest=TRANS_DEST_LANG, interval=random.choice(TRANS_REQ_INTERVALS))

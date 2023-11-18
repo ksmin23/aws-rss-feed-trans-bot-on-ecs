@@ -25,13 +25,11 @@ class RssFeedTransBotEcsStack(Stack):
   def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
     super().__init__(scope, construct_id, **kwargs)
 
-    vpc_name = self.node.try_get_context("vpc_name")
+    vpc_name = self.node.try_get_context("vpc_name") or "default"
     vpc = aws_ec2.Vpc.from_lookup(self, "VPC",
       # is_default=True, #XXX: Whether to match the default VPC
       vpc_name=vpc_name)
 
-    # s3_bucket_name = self.node.try_get_context('s3_bucket_name')
-    # s3_bucket = s3.Bucket.from_bucket_name(self, id, s3_bucket_name)
     s3_bucket_name_suffix = self.node.try_get_context('s3_bucket_name_suffix')
     s3_bucket = s3.Bucket(self, 'TransRecentAnncmtBucket',
       # removal_policy=cdk.RemovalPolicy.DESTROY,
@@ -62,7 +60,7 @@ class RssFeedTransBotEcsStack(Stack):
 
     elasticache_subnet_group = aws_elasticache.CfnSubnetGroup(self, 'RssFeedTransBotCacheSubnetGroup',
       description='subnet group for rss-feed-trans-bot-redis',
-      subnet_ids=vpc.select_subnets(subnet_type=aws_ec2.SubnetType.PRIVATE_WITH_NAT).subnet_ids,
+      subnet_ids=vpc.select_subnets(subnet_type=aws_ec2.SubnetType.PRIVATE_WITH_EGRESS).subnet_ids,
       cache_subnet_group_name='rss-feed-trans-bot-redis'
     )
 
@@ -83,7 +81,7 @@ class RssFeedTransBotEcsStack(Stack):
 
     #XXX: If you're going to launch your cluster in an Amazon VPC, you need to create a subnet group before you start creating a cluster.
     # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-elasticache-cache-cluster.html#cfn-elasticache-cachecluster-cachesubnetgroupname
-    translated_feed_cache.add_depends_on(elasticache_subnet_group)
+    translated_feed_cache.add_dependency(elasticache_subnet_group)
 
     cluster = aws_ecs.Cluster(self, "ECSCluster",
       cluster_name="rssfeed-trans-bot",
@@ -162,7 +160,7 @@ class RssFeedTransBotEcsStack(Stack):
         "REGION_NAME": cdk.Aws.REGION
       },
       logging=aws_ecs.LogDriver.aws_logs(stream_prefix="ecs",
-        log_group=aws_logs.LogGroup(self, 
+        log_group=aws_logs.LogGroup(self,
           "ECSContainerLogGroup",
           log_group_name="/ecs/rss-feed-trans-bot",
           retention=aws_logs.RetentionDays.ONE_DAY,
@@ -191,7 +189,7 @@ class RssFeedTransBotEcsStack(Stack):
       task_definition=task,
       role=ecs_events_role,
       security_groups=[sg_use_elasticache],
-      subnet_selection=aws_ec2.SubnetSelection(subnet_type=aws_ec2.SubnetType.PRIVATE_WITH_NAT)))
+      subnet_selection=aws_ec2.SubnetSelection(subnet_type=aws_ec2.SubnetType.PRIVATE_WITH_EGRESS)))
 
 
 _env = cdk.Environment(
